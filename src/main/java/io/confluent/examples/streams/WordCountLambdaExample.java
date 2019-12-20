@@ -49,10 +49,8 @@ import java.util.regex.Pattern;
  * 2) Create the input and output topics used by this example.
  * <pre>
  * {@code
- * $ bin/kafka-topics --create --topic streams-plaintext-input \
- *                    --zookeeper localhost:2181 --partitions 1 --replication-factor 1
- * $ bin/kafka-topics --create --topic streams-wordcount-output \
- *                    --zookeeper localhost:2181 --partitions 1 --replication-factor 1
+ * $ bin/kafka-topics.sh --create --topic streams-plaintext-input --zookeeper localhost:32181 --partitions 1 --replication-factor 1
+ * $ bin/kafka-topics.sh --create --topic streams-wordcount-output --zookeeper localhost:32181 --partitions 1 --replication-factor 1
  * }</pre>
  * Note: The above commands are for the Confluent Platform. For Apache Kafka it should be {@code bin/kafka-topics.sh ...}.
  * <p>
@@ -66,6 +64,10 @@ import java.util.regex.Pattern;
  * }
  * </pre>
  * 4) Write some input data to the source topic "streams-plaintext-input" (e.g. via {@code kafka-console-producer}).
+ * <pre>
+ * {@code
+ * $ bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-plaintext-input
+ * }</pre>
  * The already running example application (step 3) will automatically process this input data and write the
  * results to the output topic "streams-wordcount-output".
  * <pre>
@@ -77,15 +79,11 @@ import java.util.regex.Pattern;
  * #   join kafka summit<ENTER>
  * #
  * # Every line you enter will become the value of a single Kafka message.
- * $ bin/kafka-console-producer --broker-list localhost:9092 --topic streams-plaintext-input
  * }</pre>
  * 5) Inspect the resulting data in the output topic, e.g. via {@code kafka-console-consumer}.
  * <pre>
  * {@code
- * $ bin/kafka-console-consumer --topic streams-wordcount-output --from-beginning \
- *                              --bootstrap-server localhost:9092 \
- *                              --property print.key=true \
- *                              --property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer
+ * $ bin/kafka-console-consumer.sh --topic streams-wordcount-output --from-beginning --bootstrap-server localhost:9092 --property print.key=true --property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer
  * }</pre>
  * You should see output data similar to below. Please note that the exact output
  * sequence will depend on how fast you type the above sentences. If you type them

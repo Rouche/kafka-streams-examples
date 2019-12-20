@@ -77,60 +77,75 @@ services:
       - "moby:127.0.0.1"
 
   # Continuously generates input data for the Kafka Music application.
-  kafka-music-data-generator:
-    image: confluentinc/kafka-streams-examples:5.3.1
-    hostname: kafka-music-data-generator
-    depends_on:
-      - kafka
-      - schema-registry
-      - kafka-create-topics
-    # Control startup order similarly to the "kafka-create-topics" container above.
-    command: "bash -c 'echo Waiting for Kafka to be ready... && \
-                       cub kafka-ready -b kafka:29092 1 20 && \
-                       echo Waiting for Confluent Schema Registry to be ready... && \
-                       cub sr-ready schema-registry 8081 20 && \
-                       java -cp /usr/share/java/kafka-streams-examples/kafka-streams-examples-5.3.1-standalone.jar \
-                       io.confluent.examples.streams.interactivequeries.kafkamusic.KafkaMusicExampleDriver \
-                       kafka:29092 http://schema-registry:8081'"
-    environment:
-      STREAMS_BOOTSTRAP_SERVERS: ignored
-      STREAMS_SCHEMA_REGISTRY_HOST: ignored
-      STREAMS_SCHEMA_REGISTRY_PORT: ignored
-      KAFKA_MUSIC_APP_REST_HOST: ignored
-      KAFKA_MUSIC_APP_REST_PORT: ignored
-    extra_hosts:
-      - "moby:127.0.0.1"
+#  kafka-music-data-generator:
+#    image: confluentinc/kafka-streams-examples:5.3.1
+#    hostname: kafka-music-data-generator
+#    depends_on:
+#      - kafka
+#      - schema-registry
+#      - kafka-create-topics
+#    # Control startup order similarly to the "kafka-create-topics" container above.
+#    command: "bash -c 'echo Waiting for Kafka to be ready... && \
+#                       cub kafka-ready -b kafka:29092 1 20 && \
+#                       echo Waiting for Confluent Schema Registry to be ready... && \
+#                       cub sr-ready schema-registry 8081 20 && \
+#                       java -cp /usr/share/java/kafka-streams-examples/kafka-streams-examples-5.3.1-standalone.jar \
+#                       io.confluent.examples.streams.interactivequeries.kafkamusic.KafkaMusicExampleDriver \
+#                       kafka:29092 http://schema-registry:8081'"
+#    environment:
+#      STREAMS_BOOTSTRAP_SERVERS: ignored
+#      STREAMS_SCHEMA_REGISTRY_HOST: ignored
+#      STREAMS_SCHEMA_REGISTRY_PORT: ignored
+#      KAFKA_MUSIC_APP_REST_HOST: ignored
+#      KAFKA_MUSIC_APP_REST_PORT: ignored
+#    extra_hosts:
+#      - "moby:127.0.0.1"
 
   # Runs the Kafka Music application.
-  kafka-music-application:
-    image: confluentinc/kafka-streams-examples:5.3.1
-    hostname: kafka-music-application
-    depends_on:
-      - kafka
-      - schema-registry
-      - kafka-create-topics
-    # Control startup order similarly to the "kafka-create-topics" container above.
-    # Note: The container's `run` script will perform the same readiness checks
-    # for Kafka and Confluent Schema Registry, but that's ok because they complete fast.
-    # The reason we check for readiness here is that we can insert a sleep time
-    # for topic creation before we start the application.
-    #
-    # TODO: Once https://issues.apache.org/jira/browse/KAFKA-5037 is resolved,
-    #       we can remove this `command` and use the image as-is.
-    command: "bash -c 'echo Waiting for Kafka to be ready... && \
-                       cub kafka-ready -b kafka:29092 1 20 && \
-                       echo Waiting for Confluent Schema Registry to be ready... && \
-                       cub sr-ready schema-registry 8081 20 && \
-                       echo Waiting a few seconds for topic creation to finish... && \
-                       sleep 2 && \
-                       /etc/confluent/docker/run'"
+#  kafka-music-application:
+#    image: confluentinc/kafka-streams-examples:5.3.1
+#    hostname: kafka-music-application
+#    depends_on:
+#      - kafka
+#      - schema-registry
+#      - kafka-create-topics
+#    # Control startup order similarly to the "kafka-create-topics" container above.
+#    # Note: The container's `run` script will perform the same readiness checks
+#    # for Kafka and Confluent Schema Registry, but that's ok because they complete fast.
+#    # The reason we check for readiness here is that we can insert a sleep time
+#    # for topic creation before we start the application.
+#    #
+#    # TODO: Once https://issues.apache.org/jira/browse/KAFKA-5037 is resolved,
+#    #       we can remove this `command` and use the image as-is.
+#    command: "bash -c 'echo Waiting for Kafka to be ready... && \
+#                       cub kafka-ready -b kafka:29092 1 20 && \
+#                       echo Waiting for Confluent Schema Registry to be ready... && \
+#                       cub sr-ready schema-registry 8081 20 && \
+#                       echo Waiting a few seconds for topic creation to finish... && \
+#                       sleep 2 && \
+#                       /etc/confluent/docker/run'"
+#    ports:
+#      - '7070:7070'
+#    environment:
+#      STREAMS_BOOTSTRAP_SERVERS: kafka:29092
+#      STREAMS_SCHEMA_REGISTRY_HOST: schema-registry
+#      STREAMS_SCHEMA_REGISTRY_PORT: 8081
+#      KAFKA_MUSIC_APP_REST_HOST: kafka-music-application
+#      KAFKA_MUSIC_APP_REST_PORT: 7070
+#    extra_hosts:
+#      - "moby:127.0.0.1"
+
+  control-center:
+    image: confluentinc/cp-enterprise-control-center:5.3.1
     ports:
-      - '7070:7070'
+      - "9021:9021"
     environment:
-      STREAMS_BOOTSTRAP_SERVERS: kafka:29092
-      STREAMS_SCHEMA_REGISTRY_HOST: schema-registry
-      STREAMS_SCHEMA_REGISTRY_PORT: 8081
-      KAFKA_MUSIC_APP_REST_HOST: kafka-music-application
-      KAFKA_MUSIC_APP_REST_PORT: 7070
-    extra_hosts:
-      - "moby:127.0.0.1"
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: 'kafka:29092'
+      CONTROL_CENTER_ZOOKEEPER_CONNECT: 'zookeeper:32181'
+      CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+      CONTROL_CENTER_REPLICATION_FACTOR: 1
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+      CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+      CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+      PORT: 9021
+
