@@ -102,8 +102,8 @@ public class LargeRegionEnumerate {
         final Properties streamsConfiguration = new Properties();
         // Give the Streams application a unique name.  The name must be unique in the Kafka cluster
         // against which the application is run.
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "user-region-enumerate-example2");
-        streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "user-region-enumerate-example-client2");
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "user-region-enumerate-example3");
+        streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "user-region-enumerate-example-client3");
         // Where to find Kafka broker(s).
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         // Specify default (de)serializers for record keys and for record values.
@@ -124,7 +124,7 @@ public class LargeRegionEnumerate {
                 .toStream();
 
         regionsStream.foreach((s, aLong) -> {
-            System.out.format("Key [%s] Value: [%d]", s, aLong);
+            System.out.format("Key [%s] Value: [%d]\n", s, aLong);
         });
 
         // write to the result topic, we need to override the value serializer to for type long
