@@ -20,22 +20,21 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Properties;
 
-import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
+import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
-import okhttp3.Request;
-import okhttp3.RequestBody;
+import ksql.users;
 
 /**
  * Demonstrates group-by operations and aggregations on KTable. In this specific example we
@@ -110,6 +109,7 @@ public class ReadUsers {
 
     public static void main(final String[] args) throws Exception {
         final String bootstrapServers = args.length > 0 ? args[0] : "localhost:9092";
+        final String schemaRegistryUrl = args.length > 1 ? args[1] : "http://localhost:8081";
         final Properties streamsConfiguration = new Properties();
         // Give the Streams application a unique name.  The name must be unique in the Kafka cluster
         // against which the application is run.
@@ -117,38 +117,49 @@ public class ReadUsers {
         streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "read-user-client");
         // Where to find Kafka broker(s).
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        // Specify default (de)serializers for record keys and for record values.
-        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, SpecificAvroSerde.class);
-        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         // Records should be flushed every 10 seconds. This is less than the default
         // in order to keep this example interactive.
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
 
-//        final StreamsBuilder builder = new StreamsBuilder();
-//
-//        final KTable<String, Long> users = builder.table("USERS");
-//
-//        KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
-//
-//        stream.cleanUp();
-//        stream.start();
-//
-//        final String queryableStoreName = users.queryableStoreName();
-//
-//        ReadOnlyKeyValueStore view = stream.store(queryableStoreName, QueryableStoreTypes.keyValueStore());
-//
-//        System.out.println(view.get("User_5").toString());
-//
-//        Runtime.getRuntime().addShutdownHook(new Thread(stream::close));
+        // create and configure the SpecificAvroSerdes required in this example
+        final SpecificAvroSerde<users> userSerde = new SpecificAvroSerde<>();
+        final Map<String, String> serdeConfig =
+                Collections.singletonMap(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
+                        schemaRegistryUrl);
+        userSerde.configure(serdeConfig, false);
 
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<String, users> users = builder.stream("users", Consumed.with(Serdes.String(), userSerde));
+
+        users.groupByKey()
+                .reduce((v1, v2) -> v1.getRegistertime() > v2.getRegistertime() ? v1 : v2)
+                .toStream()
+                .foreach((k, v) -> {
+                    System.out.println(v.toString());
+                });
+
+        KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
+
+        stream.cleanUp();
+        stream.start();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(stream::close));
+
+        readFromKsql();
+    }
+
+    private static void readFromKsql() throws IOException, InterruptedException {
         final HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_2)
                 .build();
 
         final String body = "{\n" +
-                "  \"ksql\": \"select * from users limit 20;\",\n" +
+                "  \"ksql\": \"select * from users where userid = 'User_5' limit 10;\",\n" +
                 "  \"streamsProperties\": {\n" +
-//                "    \"ksql.streams.auto.offset.reset\": \"latest\"\n" +
+                "    \"ksql.streams.auto.offset.reset\": \"earliest\"\n" +
                 "  }\n" +
                 "}";
 
@@ -168,5 +179,4 @@ public class ReadUsers {
         // print response body
         System.out.println(response.body());
     }
-
 }

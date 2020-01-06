@@ -1,0 +1,1 @@
+curl -X POST -H "Content-Type: application/json" --data @connector_users_cos.config http://localhost:8083/connectors
