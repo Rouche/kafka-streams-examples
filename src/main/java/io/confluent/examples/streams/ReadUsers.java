@@ -20,6 +20,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.security.KeyPair;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
@@ -27,10 +28,13 @@ import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
 
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
@@ -130,6 +134,70 @@ public class ReadUsers {
         userSerde.configure(serdeConfig, false);
 
 
+        //createReduceStream(streamsConfiguration, userSerde);
+        createReduceStream2(streamsConfiguration, userSerde);
+        //createTableStream(streamsConfiguration, userSerde);
+        //createTableStream2(streamsConfiguration, userSerde);
+
+        readFromKsql();
+    }
+
+    /**
+     * Create a KTable and group by Gender
+     * @param streamsConfiguration
+     * @param userSerde
+     */
+    private static void createTableStream(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KTable<String, users> users = builder.table("users", Consumed.with(Serdes.String(), userSerde));
+
+        users.groupBy((key, value) -> KeyValue.pair(value.getGender(), value), Grouped.with(Serdes.String(), userSerde))
+                .reduce((cur, val) -> {
+                    System.out.println("ktable cur[" + cur.getUserid() + "," + cur.getGender() + "] val[" + val.getUserid() + "," + val.getGender() + "]");
+                    return val;
+                }, (users1, v1) -> v1)
+                .toStream()
+                .foreach((k, v) -> System.out.println(v.toString()));
+
+        @SuppressWarnings("squid:S2095")
+        KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
+
+        stream.cleanUp();
+        stream.start();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(stream::close));
+    }
+
+    /**
+     * Parse a KTable transformed in stream to see if only latest key is return.
+     * Wich is not!
+     * @param streamsConfiguration
+     * @param userSerde
+     */
+    private static void createTableStream2(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KTable<String, users> users = builder.table("users", Consumed.with(Serdes.String(), userSerde));
+
+        users.toStream()
+                .foreach((k, v) -> System.out.println(v.toString()));
+
+        @SuppressWarnings("squid:S2095")
+        KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
+
+        stream.cleanUp();
+        stream.start();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(stream::close));
+    }
+
+    /**
+     * Create a stream and group by Key then reducce it.
+     * @param streamsConfiguration
+     * @param userSerde
+     */
+    private static void createReduceStream(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, users> users = builder.stream("users", Consumed.with(Serdes.String(), userSerde));
@@ -155,8 +223,33 @@ public class ReadUsers {
         stream.start();
 
         Runtime.getRuntime().addShutdownHook(new Thread(stream::close));
+    }
 
-        readFromKsql();
+    /**
+     * Create a stream and group by another Key then reduce it.
+     * @param streamsConfiguration
+     * @param userSerde
+     */
+    private static void createReduceStream2(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<String, users> users = builder.stream("users", Consumed.with(Serdes.String(), userSerde));
+
+        users.groupBy((key, value) -> value.getGender(), Grouped.with(Serdes.String(), userSerde))
+                .reduce((v1, v2) -> {
+                    System.out.println("reducing v1[" + v1.getUserid() + "," + v1.getGender() + "] v2[" + v2.getUserid() + "," + v2.getGender() + "]");
+                    return v2;
+                })
+                .toStream()
+                .foreach((k, v) -> System.out.println(v.toString()));
+
+        @SuppressWarnings("squid:S2095")
+        KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
+
+        stream.cleanUp();
+        stream.start();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(stream::close));
     }
 
     private static void readFromKsql() throws IOException, InterruptedException {
@@ -165,7 +258,7 @@ public class ReadUsers {
                 .build();
 
         final String body = "{\n" +
-                "  \"ksql\": \"select * from users where userid = 'User_5' limit 10;\",\n" +
+                "  \"ksql\": \"select * from users_table where userid = 'User_5' limit 10;\",\n" +
                 "  \"streamsProperties\": {\n" +
                 "    \"ksql.streams.auto.offset.reset\": \"earliest\"\n" +
                 "  }\n" +
