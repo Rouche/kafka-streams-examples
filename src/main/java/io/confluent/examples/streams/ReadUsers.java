@@ -146,10 +146,9 @@ public class ReadUsers {
                     return v2;
                 })
                 .toStream()
-                .foreach((k, v) -> {
-                    System.out.println(v.toString());
-                });
+                .foreach((k, v) -> System.out.println(v.toString()));
 
+        @SuppressWarnings("squid:S2095")
         KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
 
         stream.cleanUp();
