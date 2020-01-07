@@ -1,1 +1,2 @@
+bin/kafka-topics.sh --create --topic users --zookeeper localhost:32181 --partitions 1 --replication-factor 1
 curl -X POST -H "Content-Type: application/json" --data @connector_users_cos.config http://localhost:8083/connectors

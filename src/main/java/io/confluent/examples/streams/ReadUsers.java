@@ -113,8 +113,8 @@ public class ReadUsers {
         final Properties streamsConfiguration = new Properties();
         // Give the Streams application a unique name.  The name must be unique in the Kafka cluster
         // against which the application is run.
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "read-user-example");
-        streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "read-user-client");
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "read-user-example2");
+        streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "read-user-client2");
         // Where to find Kafka broker(s).
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -134,8 +134,17 @@ public class ReadUsers {
 
         final KStream<String, users> users = builder.stream("users", Consumed.with(Serdes.String(), userSerde));
 
-        users.groupByKey()
-                .reduce((v1, v2) -> v1.getRegistertime() > v2.getRegistertime() ? v1 : v2)
+        users //.filter((k, v) -> k.equals("User_7"))
+                .groupByKey()
+                .reduce((v1, v2) -> {
+                    System.out.print("reducing v1[" + v1.getUserid() + "," + v1.getRegistertime() + "] v2[" + v2.getUserid() + "," + v2.getRegistertime() + "]");
+                    if (v1.getRegistertime() > v2.getRegistertime()) {
+                        System.out.println(" returning v1");
+                        return v1;
+                    }
+                    System.out.println(" returning v2");
+                    return v2;
+                })
                 .toStream()
                 .foreach((k, v) -> {
                     System.out.println(v.toString());
@@ -174,7 +183,11 @@ public class ReadUsers {
 
 
         // print status code
-        System.out.println(response.statusCode());
+        if(response.statusCode() != 200) {
+            System.out.println("////////////////////////////////////");
+            System.out.println("// Response Code: " + response.statusCode());
+            System.out.println("////////////////////////////////////");
+        }
 
         // print response body
         System.out.println(response.body());
