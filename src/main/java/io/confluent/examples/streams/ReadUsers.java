@@ -121,7 +121,7 @@ public class ReadUsers {
         final String bootstrapServers = args.length > 0 ? args[0] : "localhost:9092";
         final String schemaRegistryUrl = args.length > 1 ? args[1] : "http://localhost:8081";
         final Properties streamsConfiguration = new Properties();
-        // Give the Streams application a unique name.  The name must be unique in the Kafka cluster
+        // Give the Streams application a unique name. The name must be unique in the Kafka cluster
         // against which the application is run.
         // ROUCHE_DOCS: Here to always restart to earliest we need to change the id for a random one.
         //              This will create a LOT of consumers in kafka, check if we can delete them after.
@@ -142,7 +142,6 @@ public class ReadUsers {
                         schemaRegistryUrl);
         userSerde.configure(serdeConfig, false);
 
-
         //createReduceStream(streamsConfiguration, userSerde);
         //createReduceStream2(streamsConfiguration, userSerde);
         //createTableStream(streamsConfiguration, userSerde);
@@ -150,7 +149,7 @@ public class ReadUsers {
         //createTableFilter(streamsConfiguration, userSerde);
         //createStreamFilter(streamsConfiguration, userSerde);
 
-        //readFromKsql();
+        readFromKsql();
     }
 
     private static void createTableFilter(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
@@ -327,7 +326,7 @@ public class ReadUsers {
         // KSQL request from chrome: ws://localhost:8088/ws/query?request=%7B%22ksql%22%3A%22select%20*%20from%20users_table%20where%20rowkey%20%3D%20%27User_5%27%3B%22%2C%22streamsProperties%22%3A%7B%22auto.offset.reset%22%3A%22latest%22%7D%7D
         //                unencoded: ws://localhost:8088/ws/query?request={"ksql":"select * from users_table where rowkey = 'User_5';","streamsProperties":{"auto.offset.reset":"latest"}}
         final String body = "{" +
-                "  \"ksql\": \"select * from users_table where userid = 'User_5' limit 2;\"," +
+                "  \"ksql\": \"select * from users_table where userid = 'User_5' limit 4;\"," +
                 "  \"streamsProperties\": {" +
                 "    \"ksql.streams.auto.offset.reset\": \"earliest\"" +
                 "  }" +
