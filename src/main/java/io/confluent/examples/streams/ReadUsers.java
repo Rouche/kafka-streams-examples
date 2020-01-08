@@ -20,7 +20,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.security.KeyPair;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
@@ -117,8 +116,10 @@ public class ReadUsers {
         final Properties streamsConfiguration = new Properties();
         // Give the Streams application a unique name.  The name must be unique in the Kafka cluster
         // against which the application is run.
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "read-user-example2");
-        streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "read-user-client2");
+        // ROUCHE_DOCS: Here to always restart to earliest we need to change the id for a random one.
+        //              This will create a LOT of consumers in kafka, check if we can delete them after.
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "read-user-example");
+        streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "read-user-client");
         // Where to find Kafka broker(s).
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -134,16 +135,60 @@ public class ReadUsers {
         userSerde.configure(serdeConfig, false);
 
 
-        //createReduceStream(streamsConfiguration, userSerde);
-        createReduceStream2(streamsConfiguration, userSerde);
+        createReduceStream(streamsConfiguration, userSerde);
+        //createReduceStream2(streamsConfiguration, userSerde);
         //createTableStream(streamsConfiguration, userSerde);
         //createTableStream2(streamsConfiguration, userSerde);
+        //createTableFilter(streamsConfiguration, userSerde);
+        //createStreamFilter(streamsConfiguration, userSerde);
 
         readFromKsql();
     }
 
+    private static void createTableFilter(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KTable<String, users> users = builder.table("users", Consumed.with(Serdes.String(), userSerde));
+
+        users.filter((key, value) -> key.equals("User_7"))
+                .toStream()
+                .foreach((k, v) -> {
+                    System.out.println(v);
+                });
+
+        @SuppressWarnings("squid:S2095")
+        KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
+
+        stream.cleanUp();
+        stream.start();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(stream::close));
+    }
+
+    private static void createStreamFilter(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<String, users> users = builder.stream("users", Consumed.with(Serdes.String(), userSerde));
+
+        users.filter((key, value) -> key.equals("User_7"))
+                .foreach((k, v) -> {
+                    if(v != null)  {
+                        System.out.println(v);
+                    }
+                });
+
+        @SuppressWarnings("squid:S2095")
+        KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
+
+        stream.cleanUp();
+        stream.start();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(stream::close));
+    }
+
     /**
      * Create a KTable and group by Gender
+     *
      * @param streamsConfiguration
      * @param userSerde
      */
@@ -170,8 +215,9 @@ public class ReadUsers {
     }
 
     /**
-     * Parse a KTable transformed in stream to see if only latest key is return.
+     * Parse a KTable transformed in stream to see if only latest key is returned.
      * Wich is not!
+     *
      * @param streamsConfiguration
      * @param userSerde
      */
@@ -194,6 +240,7 @@ public class ReadUsers {
 
     /**
      * Create a stream and group by Key then reducce it.
+     *
      * @param streamsConfiguration
      * @param userSerde
      */
@@ -202,10 +249,14 @@ public class ReadUsers {
 
         final KStream<String, users> users = builder.stream("users", Consumed.with(Serdes.String(), userSerde));
 
-        users //.filter((k, v) -> k.equals("User_7"))
+        // ROUCHE_DOCS: For Jeremy's case, Combined with always earliest, we could filter status's KEY
+        //                  Then reduce on a registering timestamp to get the newest message.
+        //              This requires to read all the topic On network each time since Stream code is executed in
+        //              microservice.
+        users.filter((k, v) -> k.equals("User_7"))
                 .groupByKey()
                 .reduce((v1, v2) -> {
-                    System.out.print("reducing v1[" + v1.getUserid() + "," + v1.getRegistertime() + "] v2[" + v2.getUserid() + "," + v2.getRegistertime() + "]");
+                    System.out.print("Thread[" + Thread.currentThread().getId() + "] reducing v1[" + v1.getUserid() + "," + v1.getRegistertime() + "] v2[" + v2.getUserid() + "," + v2.getRegistertime() + "]");
                     if (v1.getRegistertime() > v2.getRegistertime()) {
                         System.out.println(" returning v1");
                         return v1;
@@ -227,6 +278,7 @@ public class ReadUsers {
 
     /**
      * Create a stream and group by another Key then reduce it.
+     *
      * @param streamsConfiguration
      * @param userSerde
      */
@@ -257,11 +309,18 @@ public class ReadUsers {
                 .version(HttpClient.Version.HTTP_2)
                 .build();
 
-        final String body = "{\n" +
-                "  \"ksql\": \"select * from users_table where userid = 'User_5' limit 10;\",\n" +
-                "  \"streamsProperties\": {\n" +
-                "    \"ksql.streams.auto.offset.reset\": \"earliest\"\n" +
-                "  }\n" +
+        // ROUCHE_DOCS: Here is the version of KSQL, it requires a KSQL table.
+        //              Problem here is we need to start at earliest and use a limit (That NEEDS to be reached!) or we need to stream the output.
+        //              Confluent's KSQL also does not need limit, hes streaming the output.
+        //              The request from JAVA api and KSQL is exactly identical. Except KSQL goes through another protocol
+        //
+        // KSQL request from chrome: ws://localhost:8088/ws/query?request=%7B%22ksql%22%3A%22select%20*%20from%20users_table%20where%20rowkey%20%3D%20%27User_5%27%3B%22%2C%22streamsProperties%22%3A%7B%22auto.offset.reset%22%3A%22latest%22%7D%7D
+        //                unencoded: ws://localhost:8088/ws/query?request={"ksql":"select * from users_table where rowkey = 'User_5';","streamsProperties":{"auto.offset.reset":"latest"}}
+        final String body = "{" +
+                "  \"ksql\": \"select * from users_table where userid = 'User_5' limit 2;\"," +
+                "  \"streamsProperties\": {" +
+                "    \"ksql.streams.auto.offset.reset\": \"earliest\"" +
+                "  }" +
                 "}";
 
         final HttpRequest request = HttpRequest.newBuilder()
@@ -273,9 +332,8 @@ public class ReadUsers {
 
         final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-
         // print status code
-        if(response.statusCode() != 200) {
+        if (response.statusCode() != 200) {
             System.out.println("////////////////////////////////////");
             System.out.println("// Response Code: " + response.statusCode());
             System.out.println("////////////////////////////////////");
