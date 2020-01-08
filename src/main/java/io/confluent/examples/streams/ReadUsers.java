@@ -35,6 +35,8 @@ import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 
+import lombok.extern.slf4j.Slf4j;
+
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import ksql.users;
@@ -108,7 +110,11 @@ import ksql.users;
  * 6) Once you're done with your experiments, you can stop this example via {@code Ctrl-C}. If needed,
  * also stop the Kafka broker ({@code Ctrl-C}), and only then stop the ZooKeeper instance ({@code Ctrl-C}).
  */
+@Slf4j
 public class ReadUsers {
+
+    private static final String USER_7 = "User_7";
+    private static final String USERS_TABLE = "users";
 
     public static void main(final String[] args) throws Exception {
         final String bootstrapServers = args.length > 0 ? args[0] : "localhost:9092";
@@ -148,13 +154,11 @@ public class ReadUsers {
     private static void createTableFilter(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<String, users> users = builder.table("users", Consumed.with(Serdes.String(), userSerde));
+        final KTable<String, users> users = builder.table(USERS_TABLE, Consumed.with(Serdes.String(), userSerde));
 
-        users.filter((key, value) -> key.equals("User_7"))
+        users.filter((key, value) -> key.equals(USER_7))
                 .toStream()
-                .foreach((k, v) -> {
-                    System.out.println(v);
-                });
+                .foreach((k, v) -> log.info(v.toString()));
 
         @SuppressWarnings("squid:S2095")
         KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -168,12 +172,12 @@ public class ReadUsers {
     private static void createStreamFilter(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<String, users> users = builder.stream("users", Consumed.with(Serdes.String(), userSerde));
+        final KStream<String, users> users = builder.stream(USERS_TABLE, Consumed.with(Serdes.String(), userSerde));
 
-        users.filter((key, value) -> key.equals("User_7"))
+        users.filter((key, value) -> key.equals(USER_7))
                 .foreach((k, v) -> {
                     if(v != null)  {
-                        System.out.println(v);
+                        log.info(v.toString());
                     }
                 });
 
@@ -195,15 +199,15 @@ public class ReadUsers {
     private static void createTableStream(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<String, users> users = builder.table("users", Consumed.with(Serdes.String(), userSerde));
+        final KTable<String, users> users = builder.table(USERS_TABLE, Consumed.with(Serdes.String(), userSerde));
 
         users.groupBy((key, value) -> KeyValue.pair(value.getGender(), value), Grouped.with(Serdes.String(), userSerde))
                 .reduce((cur, val) -> {
-                    System.out.println("ktable cur[" + cur.getUserid() + "," + cur.getGender() + "] val[" + val.getUserid() + "," + val.getGender() + "]");
+                    log.info("ktable cur[" + cur.getUserid() + "," + cur.getGender() + "] val[" + val.getUserid() + "," + val.getGender() + "]");
                     return val;
                 }, (users1, v1) -> v1)
                 .toStream()
-                .foreach((k, v) -> System.out.println(v.toString()));
+                .foreach((k, v) -> log.info(v.toString()));
 
         @SuppressWarnings("squid:S2095")
         KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -224,10 +228,10 @@ public class ReadUsers {
     private static void createTableStream2(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<String, users> users = builder.table("users", Consumed.with(Serdes.String(), userSerde));
+        final KTable<String, users> users = builder.table(USERS_TABLE, Consumed.with(Serdes.String(), userSerde));
 
         users.toStream()
-                .foreach((k, v) -> System.out.println(v.toString()));
+                .foreach((k, v) -> log.info(v.toString()));
 
         @SuppressWarnings("squid:S2095")
         KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -247,25 +251,25 @@ public class ReadUsers {
     private static void createReduceStream(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<String, users> users = builder.stream("users", Consumed.with(Serdes.String(), userSerde));
+        final KStream<String, users> users = builder.stream(USERS_TABLE, Consumed.with(Serdes.String(), userSerde));
 
         // ROUCHE_DOCS: For Jeremy's case, Combined with always earliest, we could filter status's KEY
         //                  Then reduce on a registering timestamp to get the newest message.
         //              This requires to read all the topic On network each time since Stream code is executed in
         //              microservice.
-        users.filter((k, v) -> k.equals("User_7"))
+        users.filter((k, v) -> k.equals(USER_7))
                 .groupByKey()
                 .reduce((v1, v2) -> {
-                    System.out.print("Thread[" + Thread.currentThread().getId() + "] reducing v1[" + v1.getUserid() + "," + v1.getRegistertime() + "] v2[" + v2.getUserid() + "," + v2.getRegistertime() + "]");
+                    log.info("Thread[" + Thread.currentThread().getId() + "] reducing v1[" + v1.getUserid() + "," + v1.getRegistertime() + "] v2[" + v2.getUserid() + "," + v2.getRegistertime() + "]");
                     if (v1.getRegistertime() > v2.getRegistertime()) {
-                        System.out.println(" returning v1");
+                        log.info("RETURNING v1");
                         return v1;
                     }
-                    System.out.println(" returning v2");
+                    log.info("RETURNING v2");
                     return v2;
                 })
                 .toStream()
-                .foreach((k, v) -> System.out.println(v.toString()));
+                .foreach((k, v) -> log.info(v.toString()));
 
         @SuppressWarnings("squid:S2095")
         KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -285,15 +289,15 @@ public class ReadUsers {
     private static void createReduceStream2(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<String, users> users = builder.stream("users", Consumed.with(Serdes.String(), userSerde));
+        final KStream<String, users> users = builder.stream(USERS_TABLE, Consumed.with(Serdes.String(), userSerde));
 
         users.groupBy((key, value) -> value.getGender(), Grouped.with(Serdes.String(), userSerde))
                 .reduce((v1, v2) -> {
-                    System.out.println("reducing v1[" + v1.getUserid() + "," + v1.getGender() + "] v2[" + v2.getUserid() + "," + v2.getGender() + "]");
+                    log.info("reducing v1[" + v1.getUserid() + "," + v1.getGender() + "] v2[" + v2.getUserid() + "," + v2.getGender() + "]");
                     return v2;
                 })
                 .toStream()
-                .foreach((k, v) -> System.out.println(v.toString()));
+                .foreach((k, v) -> log.info(v.toString()));
 
         @SuppressWarnings("squid:S2095")
         KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -334,12 +338,12 @@ public class ReadUsers {
 
         // print status code
         if (response.statusCode() != 200) {
-            System.out.println("////////////////////////////////////");
-            System.out.println("// Response Code: " + response.statusCode());
-            System.out.println("////////////////////////////////////");
+            log.info("////////////////////////////////////");
+            log.info("// Response Code: " + response.statusCode());
+            log.info("////////////////////////////////////");
         }
 
         // print response body
-        System.out.println(response.body());
+        log.info(response.body());
     }
 }
