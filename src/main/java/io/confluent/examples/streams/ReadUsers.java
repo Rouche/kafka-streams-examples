@@ -23,6 +23,7 @@ import java.net.http.HttpResponse;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
@@ -114,7 +115,7 @@ import ksql.users;
 public class ReadUsers {
 
     private static final String USER_7 = "User_7";
-    private static final String USERS_TABLE = "users";
+    private static final String USERS_TOPIC = "users";
 
     public static void main(final String[] args) throws Exception {
         final String bootstrapServers = args.length > 0 ? args[0] : "localhost:9092";
@@ -124,7 +125,8 @@ public class ReadUsers {
         // against which the application is run.
         // ROUCHE_DOCS: Here to always restart to earliest we need to change the id for a random one.
         //              This will create a LOT of consumers in kafka, check if we can delete them after.
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "read-user-example");
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "read-user-example-" + UUID.randomUUID().toString());
+        //streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "read-user-example");
         streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "read-user-client");
         // Where to find Kafka broker(s).
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -141,24 +143,30 @@ public class ReadUsers {
         userSerde.configure(serdeConfig, false);
 
 
-        createReduceStream(streamsConfiguration, userSerde);
+        //createReduceStream(streamsConfiguration, userSerde);
         //createReduceStream2(streamsConfiguration, userSerde);
         //createTableStream(streamsConfiguration, userSerde);
         //createTableStream2(streamsConfiguration, userSerde);
         //createTableFilter(streamsConfiguration, userSerde);
         //createStreamFilter(streamsConfiguration, userSerde);
 
-        readFromKsql();
+        //readFromKsql();
     }
 
     private static void createTableFilter(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<String, users> users = builder.table(USERS_TABLE, Consumed.with(Serdes.String(), userSerde));
+        final KTable<String, users> users = builder.table(USERS_TOPIC, Consumed.with(Serdes.String(), userSerde));
 
         users.filter((key, value) -> key.equals(USER_7))
                 .toStream()
-                .foreach((k, v) -> log.info(v.toString()));
+                .foreach((k, v) -> {
+                    if(v == null) {
+                        log.info("Filter tombstone key: {}", k);
+                    } else {
+                        log.info("Filter table        : {}", v.toString());
+                    }
+                });
 
         @SuppressWarnings("squid:S2095")
         KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -172,13 +180,11 @@ public class ReadUsers {
     private static void createStreamFilter(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<String, users> users = builder.stream(USERS_TABLE, Consumed.with(Serdes.String(), userSerde));
+        final KStream<String, users> users = builder.stream(USERS_TOPIC, Consumed.with(Serdes.String(), userSerde));
 
         users.filter((key, value) -> key.equals(USER_7))
                 .foreach((k, v) -> {
-                    if(v != null)  {
-                        log.info(v.toString());
-                    }
+                    log.info("Filter stream: {}", v.toString());
                 });
 
         @SuppressWarnings("squid:S2095")
@@ -199,11 +205,11 @@ public class ReadUsers {
     private static void createTableStream(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<String, users> users = builder.table(USERS_TABLE, Consumed.with(Serdes.String(), userSerde));
+        final KTable<String, users> users = builder.table(USERS_TOPIC, Consumed.with(Serdes.String(), userSerde));
 
         users.groupBy((key, value) -> KeyValue.pair(value.getGender(), value), Grouped.with(Serdes.String(), userSerde))
                 .reduce((cur, val) -> {
-                    log.info("ktable cur[" + cur.getUserid() + "," + cur.getGender() + "] val[" + val.getUserid() + "," + val.getGender() + "]");
+                    log.info("KTable Thread[{}] reducing cur[{},{}] val[{},{}]", Thread.currentThread().getId(), cur.getUserid(), cur.getGender(),val.getUserid(),val.getGender());
                     return val;
                 }, (users1, v1) -> v1)
                 .toStream()
@@ -228,10 +234,10 @@ public class ReadUsers {
     private static void createTableStream2(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<String, users> users = builder.table(USERS_TABLE, Consumed.with(Serdes.String(), userSerde));
+        final KTable<String, users> users = builder.table(USERS_TOPIC, Consumed.with(Serdes.String(), userSerde));
 
         users.toStream()
-                .foreach((k, v) -> log.info(v.toString()));
+                .foreach((k, v) -> log.info("KTable stream: {}", v.toString()));
 
         @SuppressWarnings("squid:S2095")
         KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -251,16 +257,16 @@ public class ReadUsers {
     private static void createReduceStream(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<String, users> users = builder.stream(USERS_TABLE, Consumed.with(Serdes.String(), userSerde));
+        final KStream<String, users> users = builder.stream(USERS_TOPIC, Consumed.with(Serdes.String(), userSerde));
 
         // ROUCHE_DOCS: For Jeremy's case, Combined with always earliest, we could filter status's KEY
         //                  Then reduce on a registering timestamp to get the newest message.
         //              This requires to read all the topic On network each time since Stream code is executed in
         //              microservice.
         users.filter((k, v) -> k.equals(USER_7))
-                .groupByKey()
+                .groupByKey() // Useless since we filter but keeping it here.
                 .reduce((v1, v2) -> {
-                    log.info("Thread[" + Thread.currentThread().getId() + "] reducing v1[" + v1.getUserid() + "," + v1.getRegistertime() + "] v2[" + v2.getUserid() + "," + v2.getRegistertime() + "]");
+                    log.info("Thread[{}] reducing v1[{},{}] v2[{},{}]", Thread.currentThread().getId(), v1.getUserid(), v1.getRegistertime(),v2.getUserid(),v2.getRegistertime());
                     if (v1.getRegistertime() > v2.getRegistertime()) {
                         log.info("RETURNING v1");
                         return v1;
@@ -269,7 +275,7 @@ public class ReadUsers {
                     return v2;
                 })
                 .toStream()
-                .foreach((k, v) -> log.info(v.toString()));
+                .foreach((k, v) -> log.info("Reduce Result: {}", v.toString()));
 
         @SuppressWarnings("squid:S2095")
         KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -289,15 +295,15 @@ public class ReadUsers {
     private static void createReduceStream2(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<String, users> users = builder.stream(USERS_TABLE, Consumed.with(Serdes.String(), userSerde));
+        final KStream<String, users> users = builder.stream(USERS_TOPIC, Consumed.with(Serdes.String(), userSerde));
 
         users.groupBy((key, value) -> value.getGender(), Grouped.with(Serdes.String(), userSerde))
                 .reduce((v1, v2) -> {
-                    log.info("reducing v1[" + v1.getUserid() + "," + v1.getGender() + "] v2[" + v2.getUserid() + "," + v2.getGender() + "]");
+                    log.info("Thread[{}] reducing v1[{},{}] v2[{},{}]", Thread.currentThread().getId(), v1.getUserid(), v1.getGender(),v2.getUserid(),v2.getGender());
                     return v2;
                 })
                 .toStream()
-                .foreach((k, v) -> log.info(v.toString()));
+                .foreach((k, v) -> log.info("Reduce result: {}", v.toString()));
 
         @SuppressWarnings("squid:S2095")
         KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -339,11 +345,11 @@ public class ReadUsers {
         // print status code
         if (response.statusCode() != 200) {
             log.info("////////////////////////////////////");
-            log.info("// Response Code: " + response.statusCode());
+            log.info("// Response Code: {}", response.statusCode());
             log.info("////////////////////////////////////");
         }
 
         // print response body
-        log.info(response.body());
+        log.info("REST API BODY: {}", response.body());
     }
 }
