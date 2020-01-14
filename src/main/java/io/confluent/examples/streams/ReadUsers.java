@@ -20,26 +20,23 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Properties;
-import java.util.UUID;
+import java.util.*;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.Grouped;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 import lombok.extern.slf4j.Slf4j;
 
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
+import ksql.userStream;
 import ksql.users;
 
 /**
@@ -310,6 +307,43 @@ public class ReadUsers {
         stream.cleanUp();
         stream.start();
 
+        Runtime.getRuntime().addShutdownHook(new Thread(stream::close));
+    }
+
+    private static void createAgregate(Properties streamsConfiguration, SpecificAvroSerde<users> userSerde, Map<String, String> serdeConfig) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        KStream<String, users> userss = builder.stream(USERS_TOPIC, Consumed.with(Serdes.String(), userSerde));
+        final SpecificAvroSerde<userStream> userStreamSpecificAvroSerde = new SpecificAvroSerde<>();
+        userStreamSpecificAvroSerde.configure(serdeConfig, false);
+        final KGroupedStream<String, users> groupedStream1 = userss.groupByKey();
+//                .groupBy((key, user) -> key,
+//            Grouped.with(Serdes.String(), userSerde));
+        KTable<String, userStream> aggregatedStream = groupedStream1.aggregate(
+                userStream::new,
+                (aggKey, newValue, aggregate) -> {
+                    if( aggregate.getUsersStream() == null){
+                        aggregate.setUsersStream(new ArrayList<>());
+                        aggregate.setUserid(newValue.getUserid());
+                    }
+                    aggregate.getUsersStream().add(newValue);
+                    return aggregate;
+                },
+                Materialized.<String, userStream, KeyValueStore<Bytes, byte[]>>as("aggregated-stream-store")
+                        .withKeySerde(Serdes.String())
+                        .withValueSerde(userStreamSpecificAvroSerde)
+        );
+        aggregatedStream.toStream().foreach((k, v) -> {
+            if(v == null) {
+                log.info("Filter tombstone key: {}", k);
+            } else {
+                log.info("Key       : {}", k);
+                log.info("Filter table        : {}", v.toString());
+            }
+        });
+        @SuppressWarnings("squid:S2095")
+        KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
+        stream.cleanUp();
+        stream.start();
         Runtime.getRuntime().addShutdownHook(new Thread(stream::close));
     }
 
