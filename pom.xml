@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.confluent</groupId>
         <artifactId>rest-utils-parent</artifactId>
-        <version>5.3.1</version>
+        <version>5.4.0</version>
     </parent>
 
     <artifactId>kafka-streams-examples</artifactId>
@@ -54,10 +54,12 @@
         <docker.skip-build>false</docker.skip-build>
         <docker.skip-test>false</docker.skip-test>
         <java.version>11</java.version>
-        <licenses.version>5.3.1</licenses.version>
+        <licenses.version>5.4.0</licenses.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <scala.version>${kafka.scala.version}.7</scala.version>
+        <scala.version>${kafka.scala.version}.8</scala.version>
         <scalatest.version>3.0.5</scalatest.version>
+        <spring.boot.version>2.2.2.RELEASE</spring.boot.version>
+        <spring.kafka.version>2.4.0.RELEASE</spring.kafka.version>
     </properties>
 
     <dependencies>
@@ -194,6 +196,24 @@
             <groupId>com.twitter</groupId>
             <artifactId>chill_${kafka.scala.version}</artifactId>
             <version>${chill.version}</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-parent -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-parent</artifactId>
+            <version>${spring.boot.version}</version>
+            <type>pom</type>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+            <version>${spring.kafka.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <version>${spring.boot.version}</version>
         </dependency>
 
         <!-- Test dependencies -->
@@ -515,38 +535,4 @@
             </plugin>
         </plugins>
     </build>
-
-    <profiles>
-        <profile>
-            <id>docker</id>
-            <activation>
-                <property>
-                    <name>env.BUILD_NUMBER</name>
-                </property>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>com.spotify</groupId>
-                        <artifactId>dockerfile-maven-plugin</artifactId>
-                        <version>${dockerfile-maven-plugin.version}</version>
-                        <executions>
-                            <execution>
-                                <id>package</id>
-                                <goals>
-                                    <goal>build</goal>
-                                </goals>
-                                <configuration combine.self="append">
-                                    <skip>${docker.skip-build}</skip>
-                                    <buildArgs>
-                                        <STREAMS_VERSION>${project.version}</STREAMS_VERSION>
-                                    </buildArgs>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 </project>

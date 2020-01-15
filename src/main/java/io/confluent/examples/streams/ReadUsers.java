@@ -333,12 +333,8 @@ public class ReadUsers {
                         .withValueSerde(userStreamSpecificAvroSerde)
         );
         aggregatedStream.toStream().foreach((k, v) -> {
-            if(v == null) {
-                log.info("Filter tombstone key: {}", k);
-            } else {
-                log.info("Key       : {}", k);
-                log.info("Filter table        : {}", v.toString());
-            }
+            log.info("Key       : {}", k);
+            log.info("Filter table        : {}", v.toString());
         });
         @SuppressWarnings("squid:S2095")
         KafkaStreams stream = new KafkaStreams(builder.build(), streamsConfiguration);
