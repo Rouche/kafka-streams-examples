@@ -68,7 +68,7 @@ public class DemoKafkaStreamConfig {
      * @throws ExecutionException
      */
     private void initTopic(String inputTopic, Properties props) throws InterruptedException, ExecutionException {
-        AdminClient kafkaAdminClient = KafkaAdminClient.create(props);
+        AdminClient kafkaAdminClient = AdminClient.create(props);
         DescribeTopicsResult describeTopicsResult = kafkaAdminClient.describeTopics(Collections.singletonList(inputTopic));
         try {
             describeTopicsResult.all().get();
@@ -78,6 +78,8 @@ public class DemoKafkaStreamConfig {
             NewTopic topic = getNewKTableTopic(inputTopic);
             CreateTopicsResult result = kafkaAdminClient.createTopics(Collections.singletonList(topic));
             result.all().get();
+        } finally {
+            kafkaAdminClient.close();
         }
     }
 
