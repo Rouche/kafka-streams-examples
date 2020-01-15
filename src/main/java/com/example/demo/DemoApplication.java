@@ -47,7 +47,7 @@ public class DemoApplication implements CommandLineRunner {
 			logger.info("*** Table content:");
 			store.all().forEachRemaining(stringObjectKeyValue -> {
 				logger.info("Key: {} Value: {}", stringObjectKeyValue.key, stringObjectKeyValue.value);
-				if (stringObjectKeyValue.value != null && stringObjectKeyValue.value.toString().contains("END")) {
+				if (stringObjectKeyValue.value != null && stringObjectKeyValue.value.toString().equals("END")) {
 					running[0] = false;
 					logger.warn("*** END ***");
 				}
