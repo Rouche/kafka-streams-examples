@@ -34,7 +34,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance, 1 Kafka broker, and 1
@@ -277,7 +276,7 @@ public class EmbeddedSingleNodeKafkaCluster extends ExternalResource {
       // The Set returned from JavaConverters.setAsJavaSetConverter does not support the remove
       // method so we need to continue to wrap in a HashSet
       final Set<String> allTopicsFromZk = new HashSet<>(
-              JavaConverters.setAsJavaSetConverter(broker.kafkaServer().zkClient().getAllTopicsInCluster()).asJava());
+          JavaConverters.setAsJavaSetConverter(broker.kafkaServer().zkClient().getAllTopicsInCluster()).asJava());
 
       final Set<String> allTopicsFromBrokerCache = new HashSet<>(
               JavaConverters.seqAsJavaListConverter(broker.kafkaServer().metadataCache().getAllTopics().toSeq()).asJava());
